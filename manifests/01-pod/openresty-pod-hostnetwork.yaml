@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: openresty
+spec:
+  hostNetwork: true
+  containers:
+  - name: openresty
+    image: openresty/openresty:latest
+    imagePullPolicy: IfNotPresent
+    ports:
+    - name: http
+      protocol: TCP
+      containerPort: 80

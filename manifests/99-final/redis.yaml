@@ -1,0 +1,54 @@
+apiVersion: apps/v1beta2
+kind: StatefulSet
+metadata:
+  name: redis
+spec:
+  selector:
+    matchLabels:
+      app: redis
+  serviceName: redis
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:4.0.12-alpine
+        imagePullPolicy: IfNotPresent
+        args:
+        - "--appendonly"
+        - "yes"
+        - "--bind"
+        - "0.0.0.0"
+        ports:
+        - name: tcp
+          protocol: TCP
+          containerPort: 6379
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        command: ["redis-server"]
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      # storageClassName: ""
+      resources:
+        requests:
+          storage: 100Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  ports:
+  - name: tcp
+    protocol: TCP
+    port: 6379
+    targetPort: tcp
+  selector:
+    app: redis

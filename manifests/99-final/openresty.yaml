@@ -1,0 +1,141 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+   name: openresty-configmap
+data:
+  hello-world.html: |-
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <title>Welcome Kubernetes!</title>
+    </head>
+    <body>
+    <h1>Hello World!</h1>
+    </body>
+    </html>
+  
+  default.conf: |-
+    server {
+        listen       80;
+        server_name  localhost;
+
+        resolver kube-dns.kube-system.svc.cluster.local valid=5s;
+        keepalive_timeout 60s;
+
+        location = /count {
+          default_type text/html;
+          content_by_lua '
+              local redis = require "resty.redis"
+              local red = redis:new()
+              local ok, err = red:connect("redis.default.svc.cluster.local", 6379)
+              if not ok then
+                  ngx.say("failed to connect: ", err)
+                  return
+              end
+
+              local count, err  = red:incr("count")
+              if err then
+                  ngx.say("failed to incr: ", err)
+                  return
+              end
+              ngx.say(string.format([[
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <title>Welcome Kubernetes!</title>
+    </head>
+    <body>
+    <h1>Hello World!</h1>
+    <h2>(with lua)</h2>
+    Server Addr: %s <br />
+    Count: %s
+    </body>
+    </html>
+                ]], ngx.var.server_addr, count))
+            ';
+        } 
+
+        location = /hello-world {
+            default_type text/html;
+            content_by_lua '
+                ngx.say(string.format([[
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <title>Welcome Kubernetes!</title>
+    </head>
+    <body>
+    <h1>Hello World!</h1>
+    <h2>(with lua)</h2>
+    Server Addr: %s <br />
+    </body>
+    </html>
+                ]], ngx.var.server_addr))
+            ';
+        }
+
+        location / {
+            root   /usr/local/openresty/nginx/html;
+            index  index.html index.htm;
+        }
+
+        error_page   500 502 503 504  /50x.html;
+        location = /50x.html {
+            root   /usr/local/openresty/nginx/html;
+        }
+    }
+
+---
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: openresty
+spec:
+  selector:
+    matchLabels:
+      app: openresty
+  replicas: 10
+  template:
+    metadata:
+      labels:
+        app: openresty
+    spec:
+      containers:
+      - name: openresty
+        image: openresty/openresty:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          protocol: TCP
+          containerPort: 80
+        volumeMounts:
+        - name: openresty-configmap
+          mountPath: /usr/local/openresty/nginx/html/hello-world.html
+          subPath: hello-world.html
+          readOnly: true
+        - name: openresty-configmap
+          mountPath: /etc/nginx/conf.d/default.conf
+          subPath: default.conf
+          readOnly: true
+      volumes:
+      - name: openresty-configmap
+        configMap:
+          name: openresty-configmap
+          items:
+          - key: hello-world.html
+            path: hello-world.html
+          - key: default.conf
+            path: default.conf
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openresty
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: openresty

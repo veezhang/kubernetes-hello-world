@@ -1,0 +1,22 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: openresty
+spec:
+  selector:
+    matchLabels:
+      app: openresty
+  replicas: 10
+  template:
+    metadata:
+      labels:
+        app: openresty
+    spec:
+      containers:
+      - name: openresty
+        image: openresty/openresty:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          protocol: TCP
+          containerPort: 80
